@@ -371,29 +371,25 @@ predict_date <- function(province, ncov = c(ncov,ncovChina), ifplot = TRUE, addt
   {
     Area <- ncov$area
     Area$updateTime <- ncovr:::conv_time(Area$updateTime)#Correct the time
+    Area$Date <- format(Area$updateTime,"%m-%d")
     Region_all <- unique(Area$provinceShortName)
     Region_name <- Region_all[match(province, Region_all)]#Match regional name
     Region <- subset(Area,provinceShortName==Region_name)
-    RegionTime <- aggregate(confirmedCount~updateTime,data=Region,sum)
-    RegionTime$Date <- format(RegionTime$updateTime,"%m-%d")
-    RegionDat <- aggregate(confirmedCount~Date,data=RegionTime,max)
+    RegionDat <- aggregate(confirmedCount~Date,data=Region,max)
+    RegionDat$Date <- as.Date(RegionDat$Date,"%m-%d")
   }
 
   if (province==dic$zh[1])
   {
     DtChina <- ncovChina[-nrow(ncovChina),]
-
-    RegionDat <- data.frame(confirmedCount=c(58, 136, 198,
-                                             ncovChina[-nrow(ncovChina),dic$zh[2]]))
-    RegionDat$Date <- seq(as.Date("2020-01-17",format="%Y-%m-%d"),
-                          by = "day", length.out = nrow(RegionDat))
+    RegionDat <- data.frame(confirmedCount=c(58, 136, 198, ncovChina[-nrow(ncovChina),dic$zh[2]]))
+    RegionDat$Date <- seq(as.Date("2020-01-17",format="%Y-%m-%d"),by = "day", length.out = nrow(RegionDat))
 
   }
 
   #No data availalbe for specific date
-  RegionDat$Day <- 1:nrow(RegionDat)
+  RegionDat$Day <- as.numeric(RegionDat$Date-RegionDat$Date[1])+1
   RegionDat$New <- with(RegionDat,confirmedCount-c(0,confirmedCount[-nrow(RegionDat)]))
-  RegionDat$Date <-  as.Date(RegionDat$Date,"%m-%d")
   Length <- as.numeric(Sys.Date()-as.Date(RegionDat$Date[1],"%m-%d")+20)#x axis from today to 20 days later
   Dseq <- format(seq(RegionDat$Date[1], by = "day", length.out = Length ),"%m-%d")
 
@@ -413,7 +409,7 @@ predict_date <- function(province, ncov = c(ncov,ncovChina), ifplot = TRUE, addt
     xmax <-  2*Coe[2,1]
 
     #End date
-    END <- Dseq [round(xmax,0)]
+    END = Dseq [round(xmax,0)]
     #Predict
     Input=nrow(RegionDat)+1
     Predict <- round(a/(1+exp((Coe[2,1]-Input)/Coe[3,1])),0)
@@ -424,13 +420,11 @@ predict_date <- function(province, ncov = c(ncov,ncovChina), ifplot = TRUE, addt
     r.sq <- max(cor(X1,Y1),0)^2
 
     #The daily increase case
-    Lth<- round(1*xmax,0)
-    newdat <- data.frame(Pred=1:Lth)
+    Lth <- as.numeric(as.Date(END,"%m-%d")-as.Date(Dseq[1],"%m-%d"))
+    newdat <-  data.frame(Date=as.Date(Dseq[1:Lth],"%m-%d"),Pred=1:Lth)
     newdat <- within(newdat, ypred <- predict(md,  list(Day = Pred )))
     newdat$Prednew <- with(newdat,ypred-c(0,ypred[-nrow(newdat)]))
-    newdat$Judge <- c(rep("Obs",nrow(RegionDat)),"Tmr",
-                      rep("Pre",nrow(newdat)-nrow(RegionDat)-1))
-
+    newdat$Judge <- ifelse(newdat$Date ==Sys.Date(),"Tmr",ifelse(newdat$Date < Sys.Date(),"Obs","Pre"))
     NewIncrease <- round(subset(newdat,Judge=="Tmr")[,"Prednew"],0)
 
   }, error = function(e) {an.error.occured <<- 1})
@@ -443,8 +437,7 @@ predict_date <- function(province, ncov = c(ncov,ncovChina), ifplot = TRUE, addt
     with(RegionDat,plot(y=confirmedCount,x=Day,xlim=c(0,Length),ylim=c(0,2*max(confirmedCount)),ylab=ifelse(ifchinese, dic$zh[9], dic$en[9]),xlab="",bty='n',xaxt = "n"))
     title(province)
     with(RegionDat,points(y=New,x=Day,col="grey",pch=19))
-    Dseq <- format(seq(RegionDat$Date[1],
-                       by = "day", length.out = Length ),"%m-%d")
+    Dseq <- format(seq(RegionDat$Date[1],by = "day", length.out = Length ),"%m-%d")
     axis(1, at=1:Length, labels=Dseq,cex.axis = 0.6,las=2)
 
     legend("topleft", legend=c(ifelse(ifchinese, dic$zh[4], dic$en[4]),
@@ -463,11 +456,7 @@ predict_date <- function(province, ncov = c(ncov,ncovChina), ifplot = TRUE, addt
       with(subset(newdat,Judge=="Tmr"),points(x=Pred,y=Prednew,col="red",pch=19))
 
       #Modelling legend
-      legend("top", legend=c(ifelse(ifchinese, dic$zh[7], dic$en[7]),
-                             ifelse(ifchinese, dic$zh[8], dic$en[8])),
-             col=c("black", "black"), lty = 1:2, cex=0.6, bty='n')
-
-      segments(0,a,xmax,a,lty="dotted")
+      legend("top", legend=c(ifelse(ifchinese, dic$zh[7], dic$en[7]),ifelse(ifchinese, dic$zh[8], dic$en[8])), col=c("black", "black"), lty = 1:2, cex=0.6, bty='n')
     }
     # }
   } else {
